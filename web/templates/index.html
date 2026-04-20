@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>{{ title }}</title>
+        <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    </head>
+    <body>
+        <h1>{{ message }}</h1>
+        <h3>jednoduchý generator sprievodov</h3>
+
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <label for="audio-file">Vyber nahrávku (wav, mp3):</label>
+            <input type="file" name="file" id="audio-file" accept="audio/*" required>
+            <button type="submit">Nahrať a spracovať</button>
+        </form>
+    </body>
+</html>
