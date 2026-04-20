@@ -1,4 +1,4 @@
-#from backend.generator.generator import MusAcGen
+from web.backend.generator.generator import MusAcGen
 
 import shutil
 from fastapi import FastAPI, Request, UploadFile, File
@@ -30,14 +30,14 @@ async def home(request: Request):
 # upload button
 @webapp.post("/upload")
 async def upload_audio(file: UploadFile = File(...)):
-    file_path = UPLOAD_DIR / file.filename
+    file_path = UPLOAD_DIR +"/"+ file.filename
     
-    # saving to disc
-    with file_path.open("wb") as buffer:
+    # saving to UPLOAD_DIR 
+    with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    #gen = MusAcGen()
-    #gen.generate(file_path)
+    gen = MusAcGen()
+    gen.generate(file_path)
     
     return {
         "info": f"Súbor '{file.filename}' bol úspešne nahraný",
