@@ -37,7 +37,7 @@ async def upload_audio(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     
     gen = MusAcGen()
-    gen.generate(file_path)
+    gen.audioToMidi(file_path)
     
     return {
         "info": f"Súbor '{file.filename}' bol úspešne nahraný",
