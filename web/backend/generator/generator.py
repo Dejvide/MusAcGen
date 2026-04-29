@@ -32,33 +32,68 @@ class MusAcGen:
         
 
         # a MIDI synthesizer
-        fs = midi2audio.FluidSynth('/usr/share/sounds/sf2/FluidR3_GM.sf2')
+        # self.fs = midi2audio.FluidSynth('/usr/share/sounds/sf2/FluidR3_GM.sf2')
 
 
-    def audioToMidi(self,file_location):
-        absolute_fl = os.path.abspath(file_location)
+    def audioToMidi_basicPitch(self,absolute_fn):
+        output_dir = "./web/backend/generator/tmp"
+        
+        
+        # filename without path
+        base_name = os.path.basename(absolute_fn) 
+        # remove extension
+        name_without_ext = os.path.splitext(base_name)[0] 
+        
+        # added basic pitch suffix
+        expected_midi_name = f"{name_without_ext}_basic_pitch.mid"
+        
+        # join with output direction
+        final_midi_path = os.path.join(output_dir, expected_midi_name)
+        
+        # absolute path
+        final_midi_path = os.path.abspath(final_midi_path)
+        if os.path.exists(final_midi_path):
+            os.remove(final_midi_path)
+        
         predict_and_save(
-            [absolute_fl],
-            "./web/backend/generator/tmp",
+            [absolute_fn],
+            output_dir,
             True,
             False,
             False,
             False,
             ICASSP_2022_MODEL_PATH)
+        return final_midi_path
     
     # the MIDI synthesis script
-    def synthesize(self,fs, tokens):
-        mid = events_to_midi(tokens)
-        mid.save('tmp.mid')
-        fs.midi_to_audio('tmp.mid', 'tmp.wav')
-        return 'tmp.wav'
+    def synthesize(self,accompaniment_events,name_without_ext):
+        acc_name = name_without_ext+"_accompaniment"
+        output_dir = "./web/backend/generator/tmp"
+        mid = events_to_midi(accompaniment_events)
+        name_without_ext_with_path = os.path.join(output_dir,acc_name)
+        if os.path.exists(name_without_ext_with_path+".mid"):
+            os.remove(name_without_ext_with_path+".mid")
+            
+        mid.save(name_without_ext_with_path+".mid")
+        return name_without_ext_with_path
     
     def generateUsingAMT(self, file_location):
         
-        relative_fl = "../"+file_location
+        absolute_fn = os.path.abspath(file_location)
+        midi_absolute_fn = self.audioToMidi_basicPitch(absolute_fn)
+        events = midi_to_events(midi_absolute_fn)
         length = 10 # time in seconds
-        events = generate(self.AMT_model, start_time=0, end_time=length, top_p=.98)
-        mid = events_to_midi(events)
-        mid.save('generated.mid')
+
+        accompaniment_events = generate(
+            self.AMT_model, 
+            start_time=0, 
+            end_time=length, 
+            controls=events,
+            top_p=0.98
+        )
+        
+        name_without_ext_with_path = self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
+        
+    
         
         
