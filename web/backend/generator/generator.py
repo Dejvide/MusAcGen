@@ -100,19 +100,28 @@ class MusAcGen:
         # it assigns times to frequencies
         times = librosa.times_like(f0, sr=sr, hop_length=hop_length)
         
+        # onset detection, which detects the natural start of the notes (like pluck or strum...)
+        # it returns a list of numbers of frames, in which an onset was detected
+        onset_frames = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length)
+        # we make it a set, for faster lookup (since it is implemented as a hashset)
+        onset_frames_set = set(onset_frames)  
+        
         # creating the midi
         midi = pretty_midi.PrettyMIDI()
         # setting the instrument to piano ( program=0 )
-        # since it is usually not important for accompaniment generators 
+        # since the instrument is usually not important for accompaniment generators 
         instrument = pretty_midi.Instrument(program=0)
         
         current_pitch = None
         start_time = 0.0
-        min_duration = 0.05  # ignoring notes shorter than 50ms
+        min_duration = 0.02  # ignoring notes shorter than 20ms
         
         # cycling through the detected frequencies frame by frame
         for i, (freq, is_voiced) in enumerate(zip(f0, voiced_flag)):
             time = times[i]
+            
+            # checking if the current frame had an offset detected
+            is_onset = i in onset_frames_set
             
             # if it is a tone and not NaN (NaN means, that no clear frequency was found)
             if is_voiced and not np.isnan(freq):
@@ -123,9 +132,9 @@ class MusAcGen:
                     current_pitch = midi_note
                     start_time = time
                     
-                # if the pitch has changed
-                # so we append the previous note
-                elif current_pitch != midi_note:
+                # if the pitch has changed or there was an onset
+                # we append the previous note
+                elif current_pitch != midi_note or is_onset:
                     if time - start_time >= min_duration:
                         note = pretty_midi.Note(
                             velocity=100, pitch=current_pitch, start=start_time, end=time
