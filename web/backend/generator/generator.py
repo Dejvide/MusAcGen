@@ -15,9 +15,15 @@ from anticipation.config import *
 from anticipation.vocab import *
 
 import tensorflow as tf
+
 from basic_pitch.inference import predict, Model
 from basic_pitch.inference import predict_and_save
 from basic_pitch import ICASSP_2022_MODEL_PATH
+
+import librosa
+import pretty_midi
+import numpy as np
+
 
 
 class MusAcGen:
@@ -29,35 +35,36 @@ class MusAcGen:
         self.AMT_MEDIUM_MODEL = 'stanford-crfm/music-medium-800k'   # slower inference, better sample quality
         self.AMT_LARGE_MODEL = 'stanford-crfm/music-large-800k'     # slowest inference, best sample quality
 
-        
+        self.OUTPUT_DIR = "./web/backend/generator/tmp"
 
         # a MIDI synthesizer
         # self.fs = midi2audio.FluidSynth('/usr/share/sounds/sf2/FluidR3_GM.sf2')
 
-
-    def audioToMidi_basicPitch(self,absolute_fn):
-        output_dir = "./web/backend/generator/tmp"
-        
-        
+    def getOutputPath(self,input_fn,suffix):
         # filename without path
-        base_name = os.path.basename(absolute_fn) 
-        # remove extension
-        name_without_ext = os.path.splitext(base_name)[0] 
+                base_name = os.path.basename(input_fn) 
+                # remove extension
+                name_without_ext = os.path.splitext(base_name)[0] 
+                
+                # added basic pitch suffix
+                expected_midi_name = f"{name_without_ext}_{suffix}"
+                
+                # join with output direction
+                final_midi_path = os.path.join(self.OUTPUT_DIR, expected_midi_name)
+                
+                # absolute path
+                return os.path.abspath(final_midi_path)
         
-        # added basic pitch suffix
-        expected_midi_name = f"{name_without_ext}_basic_pitch.mid"
+    # for converting polyphonic audio
+    def audioToMidi_basicPitch(self,absolute_fn):
         
-        # join with output direction
-        final_midi_path = os.path.join(output_dir, expected_midi_name)
-        
-        # absolute path
-        final_midi_path = os.path.abspath(final_midi_path)
+        final_midi_path = self.getOutputPath(absolute_fn,"basic_pitch.mid")
         if os.path.exists(final_midi_path):
             os.remove(final_midi_path)
         
         predict_and_save(
             [absolute_fn],
-            output_dir,
+            self.OUTPUT_DIR,
             True,
             False,
             False,
@@ -65,6 +72,85 @@ class MusAcGen:
             ICASSP_2022_MODEL_PATH)
         return final_midi_path
     
+    # for converting monophonic audio
+    def audioToMidi_librosa(self,absolute_fn):
+        final_midi_path = self.getOutputPath(absolute_fn,"librosa.mid")
+        
+        # loading audio, lowering sample rate to achieve better stability and speed
+        # also, we dont need the highest frequencies for pitch prediction
+        # since around 10 000 herz there is only noise
+        y, sr = librosa.load(absolute_fn, sr=22050)
+        # normalizing the volume
+        y = librosa.util.normalize(y)
+        # setting the the step length , by which we move
+        hop_length = 512
+        
+        # using pyIN algorithm for pitch tracking (probabilistic YIN)
+        # f0 is core frequency from the frame and voiced_flag is true, 
+        # when there was a pitch recognised in the frame  
+        f0, voiced_flag, _ = librosa.pyin(
+            y,
+            fmin=librosa.note_to_hz('A0'), # specifying range
+            fmax=librosa.note_to_hz('C8'),
+            sr=sr,
+            # higher frame length ensures that they fit the lower frequencies without a problem
+            frame_length=8192,
+            hop_length=hop_length
+        )
+        # it assigns times to frequencies
+        times = librosa.times_like(f0, sr=sr, hop_length=hop_length)
+        
+        # creating the midi
+        midi = pretty_midi.PrettyMIDI()
+        # setting the instrument to piano ( program=0 )
+        # since it is usually not important for accompaniment generators 
+        instrument = pretty_midi.Instrument(program=0)
+        
+        current_pitch = None
+        start_time = 0.0
+        min_duration = 0.05  # ignoring notes shorter than 50ms
+        
+        # cycling through the detected frequencies frame by frame
+        for i, (freq, is_voiced) in enumerate(zip(f0, voiced_flag)):
+            time = times[i]
+            
+            # if it is a tone and not NaN (NaN means, that no clear frequency was found)
+            if is_voiced and not np.isnan(freq):
+                midi_note = int(round(librosa.hz_to_midi(freq)))
+                
+                # the start of the first note
+                if current_pitch is None:
+                    current_pitch = midi_note
+                    start_time = time
+                    
+                # if the pitch has changed
+                # so we append the previous note
+                elif current_pitch != midi_note:
+                    if time - start_time >= min_duration:
+                        note = pretty_midi.Note(
+                            velocity=100, pitch=current_pitch, start=start_time, end=time
+                        )
+                        instrument.notes.append(note)
+                    current_pitch = midi_note
+                    start_time = time
+                    
+            
+            else:
+                # if the audio became silent, or there was no clear core frequency
+                if current_pitch is not None:
+                    if time - start_time >= min_duration:
+                        note = pretty_midi.Note(
+                            velocity=100, pitch=current_pitch, start=start_time, end=time
+                        )
+                        instrument.notes.append(note)
+                    current_pitch = None
+
+        # saving the midi
+        midi.instruments.append(instrument)
+        midi.write(final_midi_path)
+        
+        return final_midi_path
+        
     # the MIDI synthesis script
     def synthesize(self,accompaniment_events,name_without_ext):
         acc_name = name_without_ext+"_accompaniment"
@@ -80,7 +166,8 @@ class MusAcGen:
     def generateUsingAMT(self, file_location):
         
         absolute_fn = os.path.abspath(file_location)
-        midi_absolute_fn = self.audioToMidi_basicPitch(absolute_fn)
+        midi_absolute_fn = self.audioToMidi_librosa(absolute_fn)
+        
         events = midi_to_events(midi_absolute_fn)
         length = 10 # time in seconds
 
