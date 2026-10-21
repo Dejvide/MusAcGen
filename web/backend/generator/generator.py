@@ -23,7 +23,7 @@ from basic_pitch import ICASSP_2022_MODEL_PATH
 import librosa
 import pretty_midi
 import numpy as np
-
+import scipy.signal
 
 
 class MusAcGen:
@@ -90,19 +90,38 @@ class MusAcGen:
         # when there was a pitch recognised in the frame  
         f0, voiced_flag, _ = librosa.pyin(
             y,
-            fmin=librosa.note_to_hz('A0'), # specifying range
+            fmin=librosa.note_to_hz('C1'), # specifying range
             fmax=librosa.note_to_hz('C8'),
             sr=sr,
-            # higher frame length ensures that they fit the lower frequencies without a problem
-            frame_length=8192,
+            frame_length=2048,
             hop_length=hop_length
         )
         # it assigns times to frequencies
         times = librosa.times_like(f0, sr=sr, hop_length=hop_length)
         
+        # calculation of root mean square of energy
+        # basically volume
+        rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop_length)[0] 
+        rms_norm = rms / np.max(rms)
+        
+        # basically autotuning the notes so that the natural changes in frequency
+        # during the one note are not recognized as a note change
+        midi_array = np.zeros_like(f0, dtype=int)                                              # <--- NOVÉ
+        for i, freq in enumerate(f0):                                               # <--- NOVÉ
+            if not np.isnan(freq):                                                  # <--- NOVÉ
+                midi_array[i] = int(round(librosa.hz_to_midi(freq)))
+        
+        # deletes the miniature jumps (jitter) 
+        # it looks at neighboring kernel_size-1 frames and takes the median
+        midi_array = scipy.signal.medfilt(midi_array, kernel_size=5)
+        
         # onset detection, which detects the natural start of the notes (like pluck or strum...)
         # it returns a list of numbers of frames, in which an onset was detected
-        onset_frames = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length)
+        onset_frames = librosa.onset.onset_detect(y=y,
+                                                  sr=sr, 
+                                                  hop_length=hop_length,
+                                                  wait=2 # number of frames it will wait, under it may detect another onset
+                                                  )
         # we make it a set, for faster lookup (since it is implemented as a hashset)
         onset_frames_set = set(onset_frames)  
         
@@ -114,18 +133,22 @@ class MusAcGen:
         
         current_pitch = None
         start_time = 0.0
-        min_duration = 0.02  # ignoring notes shorter than 20ms
+        min_duration = 0.02  # ignoring notes shorter than min_duration
         
         # cycling through the detected frequencies frame by frame
-        for i, (freq, is_voiced) in enumerate(zip(f0, voiced_flag)):
+        for i, midi_note in enumerate(midi_array):
             time = times[i]
             
             # checking if the current frame had an offset detected
             is_onset = i in onset_frames_set
             
+            # flag for tone detection
+            # note is flagged as active, when pyIN set the voiced_flag, 
+            # or there was a loud sound recognized by rms 
+            is_active = (voiced_flag[i] or rms_norm[i] > 0.05) and (midi_note > 0)
+            
             # if it is a tone and not NaN (NaN means, that no clear frequency was found)
-            if is_voiced and not np.isnan(freq):
-                midi_note = int(round(librosa.hz_to_midi(freq)))
+            if is_active:
                 
                 # the start of the first note
                 if current_pitch is None:
