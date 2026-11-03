@@ -55,7 +55,7 @@ class MusAcGen:
                 # absolute path
                 return os.path.abspath(final_midi_path)
         
-    # for converting polyphonic audio
+    # for converting polyphonic audio by basic pitch
     def audioToMidi_basicPitch(self,absolute_fn):
         
         final_midi_path = self.getOutputPath(absolute_fn,"basic_pitch.mid")
@@ -72,8 +72,136 @@ class MusAcGen:
             ICASSP_2022_MODEL_PATH)
         return final_midi_path
     
-    # for converting monophonic audio
-    def audioToMidi_librosa(self,absolute_fn):
+    # for converting monophonic audio by librosa
+    def audioToMidi_pyin_v2(self,absolute_fn):
+        final_midi_path = self.getOutputPath(absolute_fn,"librosa.mid")
+        
+        # loading audio, lowering sample rate to achieve better stability and speed
+        # also, we dont need the highest frequencies for pitch prediction
+        # since around 10 000 herz there is only noise
+        y, sr = librosa.load(absolute_fn, sr=22050)
+        # normalizing the volume
+        y = librosa.util.normalize(y)
+        frame_len = 2048
+        # setting the the step length , by which we move
+        hop_length = 512
+        
+        frame_dur = hop_length / sr
+        
+        # using pyIN algorithm for pitch tracking (probabilistic YIN)
+        # f0 is core frequency from the frame and voiced_flag is true, 
+        # when there was a pitch recognised in the frame  
+        f0, voiced_flag, _ = librosa.pyin(
+            y,
+            fmin=librosa.note_to_hz('E1'), # specifying range
+            fmax=librosa.note_to_hz('C7'),
+            sr=sr,
+            frame_length=frame_len,
+            hop_length=hop_length,
+            max_transition_rate=200
+        )
+        # it assigns times to frequencies
+        times = librosa.times_like(f0, sr=sr, hop_length=hop_length)
+        
+        # calculation of root mean square of energy
+        # basically volume
+        rms = librosa.feature.rms(y=y, frame_length=frame_len, hop_length=hop_length)[0] 
+        rms_norm = rms / np.max(rms)
+        
+        # basically autotuning the notes so that the natural changes in frequency
+        # during the one note are not recognized as a note change
+        midi_float_array = librosa.hz_to_midi(f0)
+        
+        
+        # onset detection, which detects the natural start of the notes (like pluck or strum...)
+        # it returns a list of numbers of frames, in which an onset was detected
+        onset_frames = librosa.onset.onset_detect(y=y,
+                                                    sr=sr, 
+                                                    hop_length=hop_length,
+                                                    wait=2, # number of frames algorithm will wait, under it may detect another onset
+                                                    delta=0.15 # sensitivity for onset strength
+                                                    )
+        # we make it a set, for faster lookup (since it is implemented as a hashset)
+        onset_frames_set = set(onset_frames)  
+        
+        # creating the midi
+        midi = pretty_midi.PrettyMIDI()
+        # setting the instrument to piano ( program=0 )
+        # since the instrument is usually not important for accompaniment generators 
+        instrument = pretty_midi.Instrument(program=0)
+        
+        # stores all the midi float values of the current note 
+        current_note_buffer = None
+        start_time = 0.0
+        min_duration = 0.05  # ignoring notes shorter than min_duration
+        
+    
+        # cycling through the detected frequencies frame by frame
+        for i, midi_note in enumerate(midi_float_array):
+            time = times[i]
+            
+            # checking if the current frame had an onset detected
+            is_onset = i in onset_frames_set
+            
+            # flag for tone detection
+            # note is flagged as active, when pyIN set the voiced_flag, 
+            # or there was a loud sound recognized by rms 
+            is_active = voiced_flag[i] and rms_norm[i] > 0.05 and not np.isnan(midi_float_array[i])
+            
+            # if it is a tone and not NaN (NaN means, that no clear frequency was found)
+            if is_active:
+                
+                # the start of the first note
+                if current_note_buffer is None:
+                    current_note_buffer = [midi_note]
+                    start_time = time
+                    
+                # if the pitch has changed or there was an onset
+                # we append the previous note
+                elif abs(np.median(current_note_buffer) - midi_note) > 0.5 or is_onset:
+                    if time - start_time >= min_duration:
+                        # we calculate the pitch as a median of all pitches from current note buffer,
+                        # to smooth out the note fluctuation
+                        note = pretty_midi.Note(
+                            velocity=100, pitch=int(np.round(np.median(current_note_buffer))), start=start_time, end=time
+                        )
+                        instrument.notes.append(note)
+                    current_note_buffer = [midi_note]
+                    start_time = time
+                else:
+                    current_note_buffer.append(midi_note)
+                    
+            
+            else:
+                # if the audio became silent, or there was no clear core frequency
+                if current_note_buffer is not None:
+                    if time - start_time >= min_duration:
+                        note = pretty_midi.Note(
+                            velocity=100, pitch=int(np.round(np.median(current_note_buffer))), start=start_time, end=time
+                        )
+                        instrument.notes.append(note)
+                    current_note_buffer = None
+                    
+        # if the recording ended during the final note
+        if current_note_buffer is not None:
+            # takes the final recorded frequency note and adds the duration of a frame
+            end_time = times[-1] + frame_dur
+            if end_time - start_time >= min_duration:
+                note = pretty_midi.Note(
+                    velocity=100, pitch=int(np.round(np.median(current_note_buffer))), start=start_time, end=end_time
+                )
+                instrument.notes.append(note)
+        # saving the midi
+        midi.instruments.append(instrument)
+        midi.write(final_midi_path)
+        
+        a, b = int(15.0 / frame_dur), int(16.2 / frame_dur)
+        for i in range(a, min(b, len(times))):
+            print(f"{times[i]:.2f} midi={midi_float_array[i]:.1f} voiced={voiced_flag[i]} rms={rms_norm[i]:.2f}", flush=True)
+        return final_midi_path
+    
+    # for converting monophonic audio by librosa
+    def audioToMidi_pyin(self,absolute_fn):
         final_midi_path = self.getOutputPath(absolute_fn,"librosa.mid")
         
         # loading audio, lowering sample rate to achieve better stability and speed
@@ -113,14 +241,15 @@ class MusAcGen:
         
         # deletes the miniature jumps (jitter) 
         # it looks at neighboring kernel_size-1 frames and takes the median
-        midi_array = scipy.signal.medfilt(midi_array, kernel_size=5)
+        
+        midi_array = scipy.signal.medfilt(midi_array, kernel_size=7)
         
         # onset detection, which detects the natural start of the notes (like pluck or strum...)
         # it returns a list of numbers of frames, in which an onset was detected
         onset_frames = librosa.onset.onset_detect(y=y,
                                                   sr=sr, 
                                                   hop_length=hop_length,
-                                                  wait=2 # number of frames it will wait, under it may detect another onset
+                                                  wait=1 # number of frames it will wait, under it may detect another onset
                                                   )
         # we make it a set, for faster lookup (since it is implemented as a hashset)
         onset_frames_set = set(onset_frames)  
@@ -198,7 +327,7 @@ class MusAcGen:
     def generateUsingAMT(self, file_location):
         
         absolute_fn = os.path.abspath(file_location)
-        midi_absolute_fn = self.audioToMidi_librosa(absolute_fn)
+        midi_absolute_fn = self.audioToMidi_pyin_v2(absolute_fn)
         
         events = midi_to_events(midi_absolute_fn)
         length = 10 # time in seconds
@@ -212,7 +341,10 @@ class MusAcGen:
         )
         
         name_without_ext_with_path = self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
-        
+
+
+gen = MusAcGen()
+gen.generateUsingAMT("web/uploads/basa spaky test.mp3")    
     
         
         
