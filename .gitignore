@@ -1,0 +1,6 @@
+# user uploads
+web/uploads/*
+# exception: testing file
+!web/uploads/basa spaky test.mp3
+# temporary files
+web/backend/generator/tmp
