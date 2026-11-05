@@ -133,7 +133,8 @@ class MusAcGen:
         # stores all the midi float values of the current note 
         current_note_buffer = None
         start_time = 0.0
-        min_duration = 0.05  # ignoring notes shorter than min_duration
+        min_duration_from_onset = 0.05  # ignoring note shorter than min_duration, if it started from onset
+        min_duration_from_pitch_change = 0.07  # ignoring note shorter than min_duration, if it started from pitch_change
         
     
         # cycling through the detected frequencies frame by frame
@@ -159,7 +160,10 @@ class MusAcGen:
                 # if the pitch has changed or there was an onset
                 # we append the previous note
                 elif abs(np.median(current_note_buffer) - midi_note) > 0.5 or is_onset:
-                    if time - start_time >= min_duration:
+                    duration = time - start_time
+                    # if the note is changed by an onset then it may be shorter
+                    min_duration = min_duration_from_onset if is_onset else min_duration_from_pitch_change
+                    if duration >= min_duration:
                         # we calculate the pitch as a median of all pitches from current note buffer,
                         # to smooth out the note fluctuation
                         note = pretty_midi.Note(
@@ -175,7 +179,10 @@ class MusAcGen:
             else:
                 # if the audio became silent, or there was no clear core frequency
                 if current_note_buffer is not None:
-                    if time - start_time >= min_duration:
+                    duration = time - start_time
+                    # if the note is changed by an onset then it may be shorter
+                    min_duration = min_duration_from_onset if is_onset else min_duration_from_pitch_change
+                    if duration >= min_duration:
                         note = pretty_midi.Note(
                             velocity=100, pitch=int(np.round(np.median(current_note_buffer))), start=start_time, end=time
                         )
@@ -186,7 +193,10 @@ class MusAcGen:
         if current_note_buffer is not None:
             # takes the final recorded frequency note and adds the duration of a frame
             end_time = times[-1] + frame_dur
-            if end_time - start_time >= min_duration:
+            duration = end_time - start_time
+            # if the note is changed by an onset then it may be shorter
+            min_duration = min_duration_from_onset if is_onset else min_duration_from_pitch_change
+            if duration >= min_duration:
                 note = pretty_midi.Note(
                     velocity=100, pitch=int(np.round(np.median(current_note_buffer))), start=start_time, end=end_time
                 )
@@ -195,9 +205,6 @@ class MusAcGen:
         midi.instruments.append(instrument)
         midi.write(final_midi_path)
         
-        a, b = int(15.0 / frame_dur), int(16.2 / frame_dur)
-        for i in range(a, min(b, len(times))):
-            print(f"{times[i]:.2f} midi={midi_float_array[i]:.1f} voiced={voiced_flag[i]} rms={rms_norm[i]:.2f}", flush=True)
         return final_midi_path
     
     # for converting monophonic audio by librosa
@@ -329,14 +336,14 @@ class MusAcGen:
         absolute_fn = os.path.abspath(file_location)
         midi_absolute_fn = self.audioToMidi_pyin_v2(absolute_fn)
         
-        events = midi_to_events(midi_absolute_fn)
+        input_events = midi_to_events(midi_absolute_fn)
         length = 10 # time in seconds
 
         accompaniment_events = generate(
             self.AMT_model, 
             start_time=0, 
             end_time=length, 
-            controls=events,
+            controls=input_events,
             top_p=0.98
         )
         
