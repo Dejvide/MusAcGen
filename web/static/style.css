@@ -1,3 +1,78 @@
+body{
+    background: linear-gradient(135deg, rgb(208, 158, 255), rgb(160, 58, 255));
+    min-height: 100vh;
+    font-family: "Fira Sans", sans-serif;
+}
+h1{
+    font-family: "Monoton", sans-serif;
+    font-weight: 500;
+    font-size: 7vw;
+    padding-top: 10vw;
+    margin-bottom: 5px;
+    text-align: center;
+}
+
+h2{
+    font-size: 2.5vw;
+    margin-top: 5px;
+    text-align: center;
+}
+
 h3{
     color: #00516f;
+}
+
+/* upload button */
+.upload {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin: 40px auto;
+  }
+
+
+.btn {
+    padding: 12px 28px;
+    font: 600 15px "Fira sans", sans-serif;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .15s, background .15s;
+  }
+
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(0); }
+
+.btn-select {
+    background: #fff;
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+  }
+.btn-select:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, .2); }
+
+.btn-upload {
+    background: linear-gradient(135deg, #653efe, #5328ff);
+    color: #fff;
+    box-shadow: 0 4px 4px #5b32ff36;
+  }
+.btn-upload:hover { box-shadow: 0 6px 6px #6e49ff87; }
+
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.btn-back {
+    background: #fff;
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+
+.btn-download {
+  background: linear-gradient(135deg, #f763ff, #f548fe);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(146, 37, 235, 0.4);
 }

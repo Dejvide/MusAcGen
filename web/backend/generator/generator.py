@@ -126,9 +126,9 @@ class MusAcGen:
         
         # creating the midi
         midi = pretty_midi.PrettyMIDI()
-        # setting the instrument to piano ( program=0 )
-        # since the instrument is usually not important for accompaniment generators 
+        # setting the instrument to piano
         instrument = pretty_midi.Instrument(program=0)
+        
         
         # stores all the midi float values of the current note 
         current_note_buffer = None
@@ -207,8 +207,6 @@ class MusAcGen:
         
         return final_midi_path
     
-    # for converting monophonic audio by librosa
-    def audioToMidi_pyin(self,absolute_fn):
         final_midi_path = self.getOutputPath(absolute_fn,"librosa.mid")
         
         # loading audio, lowering sample rate to achieve better stability and speed
@@ -263,8 +261,7 @@ class MusAcGen:
         
         # creating the midi
         midi = pretty_midi.PrettyMIDI()
-        # setting the instrument to piano ( program=0 )
-        # since the instrument is usually not important for accompaniment generators 
+        # setting the instrument to piano
         instrument = pretty_midi.Instrument(program=0)
         
         current_pitch = None
@@ -328,8 +325,9 @@ class MusAcGen:
         if os.path.exists(name_without_ext_with_path+".mid"):
             os.remove(name_without_ext_with_path+".mid")
             
-        mid.save(name_without_ext_with_path+".mid")
-        return name_without_ext_with_path
+        midi_file_name = name_without_ext_with_path+".mid"
+        mid.save(midi_file_name)
+        return midi_file_name
     
     def generateUsingAMT(self, file_location):
         
@@ -347,7 +345,7 @@ class MusAcGen:
             top_p=0.98
         )
         
-        name_without_ext_with_path = self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
+        return self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
 
 
 gen = MusAcGen()

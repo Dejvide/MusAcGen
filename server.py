@@ -1,8 +1,8 @@
 from web.backend.generator.generator import MusAcGen
 
-import shutil
+import shutil, os
 from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -37,9 +37,21 @@ async def upload_audio(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     
     gen = MusAcGen()
-    gen.generateUsingAMT(file_path)
+    acc_fn = gen.generateUsingAMT(file_path)
     
-    return {
-        "info": f"Súbor '{file.filename}' bol úspešne nahraný",
-        "path": str(file_path)
-    }
+    response = RedirectResponse(url=f"/result", status_code=303)
+    response.set_cookie("result_file",acc_fn,httponly=True)
+    return response
+
+@webapp.get("/result", response_class=HTMLResponse)
+async def result_page(request: Request):
+    if not request.cookies.get("result_file"):
+        return RedirectResponse(url="/") 
+    return templates.TemplateResponse(request=request, name="result.html")
+
+@webapp.get("/download")
+async def download(request: Request):
+    path = request.cookies.get("result_file")
+    if not path:
+        return HTMLResponse("No file", status_code=404)
+    return FileResponse(path, filename=os.path.basename(path))
