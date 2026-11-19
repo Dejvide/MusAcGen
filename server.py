@@ -16,6 +16,17 @@ webapp.mount("/static", StaticFiles(directory=BASE_DIR+"/static"), name="static"
 # Povieme FastAPI, kde hľadať HTML šablóny
 templates = Jinja2Templates(directory=BASE_DIR+"/templates")
 
+# adding the versioning to static files, to prevent wrong caching
+def static_url(path: str) -> str:
+    full_path = os.path.join(BASE_DIR, "static", path)
+    # if the file exists, return the time of the last change, otherwise return 1
+    version = int(os.path.getmtime(full_path)) if os.path.exists(full_path) else 1
+    
+    return f"/static/{path}?v={version}"
+
+# makes the method visible in html files
+templates.env.globals["static_url"] = static_url
+
 # get homepage
 @webapp.get("/", response_class=HTMLResponse)
 async def home(request: Request):

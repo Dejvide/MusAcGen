@@ -211,7 +211,7 @@ class MusAcGen:
     def midiToMusicXML(self, absolute_fn):
         xml_path = os.path.splitext(absolute_fn)[0]+".musicxml"
         # load the midi 
-        score = music21.converter.parse(absolute_fn, quantizePost=False)
+        score = music21.converter.parse(absolute_fn)
         # quantize the midi, allow 4 and 3 divisions of quarter notes 
         # score.quantize(quarterLengthDivisors=(4, 3), inPlace=True)
         

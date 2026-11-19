@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>MusAcGen</title>
-        <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+        <link rel="stylesheet" href="{{ static_url('style.css') }}">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
         <!-- container for the sheet music -->
         <div id="alphaTab" data-xml-url="/downloadXml"></div>
         <!-- load the script -->
-        <script src="/static/js/alphaTabPlayer.js"></script>
+        <script src="{{ static_url('js/alphaTabPlayer.js') }}"></script>
 
     </body>
 </html>

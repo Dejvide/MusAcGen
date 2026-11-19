@@ -89,6 +89,7 @@ h3{
   width: 3px; 
 }
 /* color of the note currently playing */
-.at-highlight * { fill: #0078ff; 
+.at-highlight * { 
+  fill: #0078ff; 
   stroke: #0078ff;
 }
