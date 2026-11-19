@@ -208,8 +208,24 @@ class MusAcGen:
         
         return final_midi_path
     
-    
-    
+    def midiToMusicXML(self, absolute_fn):
+        xml_path = os.path.splitext(absolute_fn)[0]+".musicxml"
+        # load the midi 
+        score = music21.converter.parse(absolute_fn, quantizePost=False)
+        # quantize the midi, allow 4 and 3 divisions of quarter notes 
+        # score.quantize(quarterLengthDivisors=(4, 3), inPlace=True)
+        
+        # in every instrument (part) of the midi and create measures,
+        # if they do not already exist
+        for part in score.parts:
+            try:
+                part.makeMeasures(inPlace=True)
+            except Exception:
+                pass
+            
+        score.write("musicxml", fp=xml_path)
+        return xml_path
+            
     # the MIDI synthesis script
     def synthesize(self,accompaniment_events,name_without_ext):
         acc_name = name_without_ext+"_accompaniment"
@@ -239,7 +255,9 @@ class MusAcGen:
             top_p=0.98
         )
         
-        return self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
+        midi_file_name = self.synthesize(accompaniment_events,os.path.splitext(os.path.basename(file_location))[0])
+        xml_path = self.midiToMusicXML(midi_file_name)
+        return midi_file_name, xml_path
 
 
 gen = MusAcGen()

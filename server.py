@@ -37,21 +37,29 @@ async def upload_audio(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     
     gen = MusAcGen()
-    acc_fn = gen.generateUsingAMT(file_path)
+    accomp_midi, accomp_xml = gen.generateUsingAMT(file_path)
     
     response = RedirectResponse(url=f"/result", status_code=303)
-    response.set_cookie("result_file",acc_fn,httponly=True)
+    response.set_cookie("result_file_midi",accomp_midi,httponly=True)
+    response.set_cookie("result_file_xml",accomp_xml,httponly=True)
     return response
 
 @webapp.get("/result", response_class=HTMLResponse)
 async def result_page(request: Request):
-    if not request.cookies.get("result_file"):
+    if not request.cookies.get("result_file_midi") or not request.cookies.get("result_file_xml"):
         return RedirectResponse(url="/") 
     return templates.TemplateResponse(request=request, name="result.html")
 
-@webapp.get("/download")
+@webapp.get("/downloadMidi")
 async def download(request: Request):
-    path = request.cookies.get("result_file")
+    path = request.cookies.get("result_file_midi")
     if not path:
         return HTMLResponse("No file", status_code=404)
     return FileResponse(path, media_type="audio/midi", filename=os.path.basename(path))
+
+@webapp.get("/downloadXml")
+async def download(request: Request):
+    path = request.cookies.get("result_file_xml")
+    if not path:
+        return HTMLResponse("No file", status_code=404)
+    return FileResponse(path, media_type="application/vnd.recordare.musicxml+xml", filename=os.path.basename(path))

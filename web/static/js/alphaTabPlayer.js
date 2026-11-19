@@ -27,10 +27,10 @@ const api = new alphaTab.AlphaTabApi(wrapper, settings);
 //
 // using .dataset finds all the attributes starting with data and
 // also converts the name to camelCase
-const midiUrl =  wrapper.dataset.midiUrl;
+const xmlUrl =  wrapper.dataset.xmlUrl;
 
-if (midiUrl){
-    api.load(midiUrl);
+if (xmlUrl){
+    api.load(xmlUrl);
 }
 
 // unlock the button when the soundFont is loaded
