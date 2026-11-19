@@ -58,7 +58,7 @@ h3{
   }
 .btn-upload:hover { box-shadow: 0 6px 6px #6e49ff87; }
 
-
+/* result site return and download button */
 .actions {
   display: flex;
   justify-content: center;
@@ -75,4 +75,20 @@ h3{
   background: linear-gradient(135deg, #f763ff, #f548fe);
   color: #fff;
   box-shadow: 0 4px 12px rgba(146, 37, 235, 0.4);
+}
+
+/* Alphatab styling (sheet music display) */
+/* -------------------------------------- */
+/* color of the bar currently playing */
+.at-cursor-bar { 
+  background: rgba(255, 242, 0, 0.25); 
+}
+/* the moving line */
+.at-cursor-beat { 
+  background: rgba(64, 64, 255, 0.75); 
+  width: 3px; 
+}
+/* color of the note currently playing */
+.at-highlight * { fill: #0078ff; 
+  stroke: #0078ff;
 }

@@ -54,4 +54,4 @@ async def download(request: Request):
     path = request.cookies.get("result_file")
     if not path:
         return HTMLResponse("No file", status_code=404)
-    return FileResponse(path, filename=os.path.basename(path))
+    return FileResponse(path, media_type="audio/midi", filename=os.path.basename(path))
